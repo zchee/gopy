@@ -574,7 +574,7 @@ func newVar(p *Package, typ types.Type, objname, name, doc string) (*Var, error)
 		}
 		sym = p.syms.symtype(typ)
 		if sym == nil {
-			return nil, fmt.Errorf("could not find symbol for type: %s!", typ.String())
+			return nil, fmt.Errorf("could not find symbol for type: %s", typ.String())
 		}
 	}
 	return &Var{
@@ -589,7 +589,7 @@ func newVar(p *Package, typ types.Type, objname, name, doc string) (*Var, error)
 func newVarsFrom(p *Package, tuple *types.Tuple) ([]*Var, error) {
 	vars := make([]*Var, 0, tuple.Len())
 	var lsterr error
-	for i := 0; i < tuple.Len(); i++ {
+	for i := range tuple.Len() {
 		nv, err := newVarFrom(p, tuple.At(i))
 		if err != nil {
 			lsterr = err

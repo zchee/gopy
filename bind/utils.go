@@ -61,28 +61,25 @@ func hasError(sig *types.Signature) bool {
 	}
 
 	nerr := 0
-	for i := 0; i < res.Len(); i++ {
+	for i := range res.Len() {
 		ret := res.At(i)
 		if isErrorType(ret.Type()) {
 			nerr++
 		}
 	}
 
-	switch {
-	case nerr == 0:
+	switch nerr {
+	case 0:
 		return false
-	case nerr == 1:
+	case 1:
 		return true
 	default:
-		panic(fmt.Errorf(
-			"gopy: invalid number of comma-errors (%d)",
-			nerr,
-		))
+		panic(fmt.Errorf("gopy: invalid number of comma-errors (%d)", nerr))
 	}
 }
 
 func isConstructor(sig *types.Signature) bool {
-	//TODO(sbinet)
+	// TODO(sbinet)
 	return false
 }
 
@@ -229,9 +226,7 @@ func getGoVersion(version string) (int64, int64, error) {
 	return major, minor, nil
 }
 
-var (
-	rxValidPythonName = regexp.MustCompile(`^[\pL_][\pL_\pN]+$`)
-)
+var rxValidPythonName = regexp.MustCompile(`^[\pL_][\pL_\pN]+$`)
 
 func extractPythonName(gname, gdoc string) (string, string, error) {
 	const (

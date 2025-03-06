@@ -11,6 +11,7 @@ import (
 	"go/types"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -114,10 +115,8 @@ func (p *Package) getDoc(parent string, o types.Object) string {
 	case *types.Const:
 		// Check for untyped consts
 		for _, c := range p.doc.Consts {
-			for _, cn := range c.Names {
-				if n == cn {
-					return c.Doc
-				}
+			if slices.Contains(c.Names, n) {
+				return c.Doc
 			}
 		}
 		// Check for typed consts
@@ -132,10 +131,8 @@ func (p *Package) getDoc(parent string, o types.Object) string {
 		for _, t := range p.doc.Types {
 			if p.pkg.Path()+"."+t.Name == constType.String() {
 				for _, c := range t.Consts {
-					for _, cn := range c.Names {
-						if n == cn {
-							return c.Doc
-						}
+					if slices.Contains(c.Names, n) {
+						return c.Doc
 					}
 				}
 			}
@@ -175,10 +172,8 @@ func (p *Package) getDoc(parent string, o types.Object) string {
 		}
 		// Otherwise just check the captured vars
 		for _, v := range p.doc.Vars {
-			for _, vn := range v.Names {
-				if n == vn {
-					return v.Doc
-				}
+			if slices.Contains(v.Names, n) {
+				return v.Doc
 			}
 		}
 
@@ -246,7 +241,7 @@ func (p *Package) getDoc(parent string, o types.Object) string {
 			if tup == nil {
 				return params
 			}
-			for i := 0; i < tup.Len(); i++ {
+			for i := range tup.Len() {
 				paramVar := tup.At(i)
 				paramSig := p.syms.symtype(paramVar.Type())
 				if paramSig == nil {
@@ -267,7 +262,7 @@ func (p *Package) getDoc(parent string, o types.Object) string {
 		paramString := strings.Join(params, ", ")
 		resultString := strings.Join(results, ", ")
 
-		//FIXME(sbinet): add receiver for methods?
+		// FIXME(sbinet): add receiver for methods?
 		docSig := fmt.Sprintf("%s(%s) %s", o.Name(), paramString, resultString)
 
 		if doc != "" {
@@ -408,7 +403,7 @@ func (p *Package) process() error {
 		}
 		switch typ := sym.GoType().(type) {
 		case *types.Named:
-			for i := 0; i < typ.NumMethods(); i++ {
+			for i := range typ.NumMethods() {
 				m := typ.Method(i)
 				if !m.Exported() {
 					continue
@@ -456,7 +451,7 @@ func (p *Package) process() error {
 		}
 
 		nmeth := ntyp.NumMethods()
-		for mi := 0; mi < nmeth; mi++ {
+		for mi := range nmeth {
 			meth := ntyp.Method(mi)
 			if !meth.Exported() {
 				continue
@@ -476,7 +471,7 @@ func (p *Package) process() error {
 
 	for iname, ifc := range ifaces {
 		mset := types.NewMethodSet(ifc.GoType())
-		for i := 0; i < mset.Len(); i++ {
+		for i := range mset.Len() {
 			meth := mset.At(i)
 			if !meth.Obj().Exported() {
 				continue
@@ -497,7 +492,7 @@ func (p *Package) process() error {
 			continue
 		}
 		nmeth := ntyp.NumMethods()
-		for mi := 0; mi < nmeth; mi++ {
+		for mi := range nmeth {
 			meth := ntyp.Method(mi)
 			if !meth.Exported() {
 				continue
@@ -522,7 +517,7 @@ func (p *Package) process() error {
 			continue
 		}
 		nmeth := ntyp.NumMethods()
-		for mi := 0; mi < nmeth; mi++ {
+		for mi := range nmeth {
 			meth := ntyp.Method(mi)
 			if !meth.Exported() {
 				continue

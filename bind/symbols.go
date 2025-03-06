@@ -45,24 +45,22 @@ const (
 	skString
 )
 
-var (
-	symkinds = map[string]symkind{
-		"const":     skConst,
-		"var":       skVar,
-		"func":      skFunc,
-		"type":      skType,
-		"array":     skArray,
-		"basic":     skBasic,
-		"interface": skInterface,
-		"map":       skMap,
-		"named":     skNamed,
-		"pointer":   skPointer,
-		"signature": skSignature,
-		"slice":     skSlice,
-		"struct":    skStruct,
-		"string":    skString,
-	}
-)
+var symkinds = map[string]symkind{
+	"const":     skConst,
+	"var":       skVar,
+	"func":      skFunc,
+	"type":      skType,
+	"array":     skArray,
+	"basic":     skBasic,
+	"interface": skInterface,
+	"map":       skMap,
+	"named":     skNamed,
+	"pointer":   skPointer,
+	"signature": skSignature,
+	"slice":     skSlice,
+	"struct":    skStruct,
+	"string":    skString,
+}
 
 func (k symkind) String() string {
 	str := []string{}
@@ -76,7 +74,40 @@ func (k symkind) String() string {
 }
 
 var pyKeywords = map[string]struct{}{
-	"False": struct{}{}, "None": struct{}{}, "True": struct{}{}, "and": struct{}{}, "as": struct{}{}, "assert": struct{}{}, "break": struct{}{}, "class": struct{}{}, "continue": struct{}{}, "def": struct{}{}, "del": struct{}{}, "elif": struct{}{}, "else": struct{}{}, "except": struct{}{}, "finally": struct{}{}, "for": struct{}{}, "from": struct{}{}, "global": struct{}{}, "if": struct{}{}, "import": struct{}{}, "in": struct{}{}, "is": struct{}{}, "lambda": struct{}{}, "nonlocal": struct{}{}, "not": struct{}{}, "or": struct{}{}, "pass": struct{}{}, "raise": struct{}{}, "return": struct{}{}, "try": struct{}{}, "while": struct{}{}, "with": struct{}{}, "yield": struct{}{}, "self": struct{}{},
+	"False":    {},
+	"None":     {},
+	"True":     {},
+	"and":      {},
+	"as":       {},
+	"assert":   {},
+	"break":    {},
+	"class":    {},
+	"continue": {},
+	"def":      {},
+	"del":      {},
+	"elif":     {},
+	"else":     {},
+	"except":   {},
+	"finally":  {},
+	"for":      {},
+	"from":     {},
+	"global":   {},
+	"if":       {},
+	"import":   {},
+	"in":       {},
+	"is":       {},
+	"lambda":   {},
+	"nonlocal": {},
+	"not":      {},
+	"or":       {},
+	"pass":     {},
+	"raise":    {},
+	"return":   {},
+	"try":      {},
+	"while":    {},
+	"with":     {},
+	"yield":    {},
+	"self":     {},
 }
 
 // pySafeName returns a name that python will not barf on
@@ -191,7 +222,7 @@ func isPyCompatFunc(sig *types.Signature) (ret types.Type, haserr, hasfun bool, 
 
 	args := sig.Params()
 	nargs := args.Len()
-	for i := 0; i < nargs; i++ {
+	for i := range nargs {
 		arg := args.At(i)
 		argt := arg.Type()
 		if err = isPyCompatType(argt); err != nil {
@@ -250,10 +281,7 @@ func (s *symbol) isNamedBasic() bool {
 		return false
 	}
 	_, ok := s.gotyp.Underlying().(*types.Basic)
-	if ok {
-		return true
-	}
-	return false
+	return ok
 }
 
 func (s *symbol) isArray() bool {
@@ -453,7 +481,7 @@ func (sym *symtab) typeof(n string) *symbol {
 		tname := sym.fullTypeString(s.goobj.Type())
 		return sym.sym(tname)
 	case skFunc:
-		//FIXME(sbinet): really?
+		// FIXME(sbinet): really?
 		return s
 	case skType:
 		return s
@@ -495,17 +523,17 @@ func (sym *symtab) typeGoName(t types.Type) string {
 
 // typeIdName returns typeGoName with . -> _ -- this should always be used for id
 func (sym *symtab) typeIdName(t types.Type) string {
-	idn := strings.Replace(sym.typeGoName(t), ".", "_", -1)
+	idn := strings.ReplaceAll(sym.typeGoName(t), ".", "_")
 	if _, isary := t.(*types.Array); isary {
 		idn = strings.Replace(idn, "[", "Array_", 1)
 		idn = strings.Replace(idn, "]", "_", 1)
 	}
-	idn = strings.Replace(idn, "[]", "Slice_", -1)
-	idn = strings.Replace(idn, "map[", "Map_", -1)
-	idn = strings.Replace(idn, "[", "_", -1)
-	idn = strings.Replace(idn, "]", "_", -1)
-	idn = strings.Replace(idn, "{}", "_", -1)
-	idn = strings.Replace(idn, "*", "Ptr_", -1)
+	idn = strings.ReplaceAll(idn, "[]", "Slice_")
+	idn = strings.ReplaceAll(idn, "map[", "Map_")
+	idn = strings.ReplaceAll(idn, "[", "_")
+	idn = strings.ReplaceAll(idn, "]", "_")
+	idn = strings.ReplaceAll(idn, "{}", "_")
+	idn = strings.ReplaceAll(idn, "*", "Ptr_")
 	return idn
 }
 
@@ -591,7 +619,7 @@ func (sym *symtab) processTuple(tuple *types.Tuple) error {
 	if tuple == nil {
 		return nil
 	}
-	for i := 0; i < tuple.Len(); i++ {
+	for i := range tuple.Len() {
 		ivar := tuple.At(i)
 		ityp := ivar.Type()
 		isym := sym.symtype(ityp)
@@ -638,7 +666,7 @@ func (sym *symtab) buildTuple(tuple *types.Tuple, varnm string, methvar string) 
 
 	// TODO: more efficient to use strings.Builder here..
 	bstr := fmt.Sprintf("%s := C.PyTuple_New(%d)\n", varnm, sz)
-	for i := 0; i < sz; i++ {
+	for i := range sz {
 		v := tuple.At(i)
 		typ := v.Type()
 		anm := pySafeArg(v.Name(), i)
@@ -728,7 +756,7 @@ func (sym *symtab) ZeroToGo(typ types.Type, sy *symbol) (string, error) {
 		case bk == types.String:
 			bstr += `C.GoString(nil)`
 		case bk == types.Bool:
-			bstr += fmt.Sprintf("false")
+			bstr += "false"
 		}
 	default:
 		return "", fmt.Errorf("ZeroToGo: type not handled: %s", typ.String())
@@ -786,7 +814,7 @@ func (sym *symtab) addType(obj types.Object, t types.Type) error {
 		kind |= skBasic
 		styp := sym.symtype(typ)
 		if styp == nil {
-			return fmt.Errorf("builtin type not already known [%s]!", n)
+			return fmt.Errorf("builtin type not already known [%s]", n)
 		}
 
 	case *types.Pointer:
@@ -808,11 +836,11 @@ func (sym *symtab) addType(obj types.Object, t types.Type) error {
 		return sym.addInterfaceType(pkg, obj, t, kind, id, n)
 
 	case *types.Chan:
-		return fmt.Errorf("gopy: channel type not supported: %s\n", n)
+		return fmt.Errorf("gopy: channel type not supported: %s", n)
 
 	case *types.Named:
 		if !typ.Obj().Exported() {
-			return fmt.Errorf("gopy: non-exported named type: %s\n", n)
+			return fmt.Errorf("gopy: non-exported named type: %s", n)
 		}
 		kind |= skNamed
 		var err error
@@ -823,7 +851,7 @@ func (sym *symtab) addType(obj types.Object, t types.Type) error {
 		case *types.Basic:
 			styp := sym.symtype(st)
 			if styp == nil {
-				return fmt.Errorf("gopy: type not found: %s\n", n)
+				return fmt.Errorf("gopy: type not found: %s", n)
 			}
 			py2go := sym.typeGoName(t)
 			py2goParEx := ""
@@ -877,7 +905,7 @@ func (sym *symtab) addType(obj types.Object, t types.Type) error {
 			err = fmt.Errorf("gopy: channel type not supported: %s", n)
 
 		default:
-			err = fmt.Errorf("unhandled named-type: [%T]\n%#v\n", obj, t)
+			err = fmt.Errorf("unhandled named-type: [%T]\n%#v", obj, t)
 		}
 
 		if err != nil {
@@ -885,7 +913,7 @@ func (sym *symtab) addType(obj types.Object, t types.Type) error {
 		}
 
 		// add methods
-		for i := 0; i < typ.NumMethods(); i++ {
+		for i := range typ.NumMethods() {
 			m := typ.Method(i)
 			if !m.Exported() {
 				continue
@@ -1014,7 +1042,7 @@ func (sym *symtab) addStructType(pkg *types.Package, obj types.Object, t types.T
 		py2go:   "*ptrFromHandle_" + id,
 		zval:    "nil",
 	}
-	for i := 0; i < typ.NumFields(); i++ {
+	for i := range typ.NumFields() {
 		if isPrivate(typ.Field(i).Name()) {
 			continue
 		}
@@ -1066,7 +1094,7 @@ func (sym *symtab) addSignatureType(pkg *types.Package, obj types.Object, t type
 
 	if nargs > 0 { // need to deal with unnamed args
 		nsig = "func ("
-		for i := 0; i < nargs; i++ {
+		for i := range nargs {
 			v := args.At(i)
 			typ := v.Type()
 			anm := pySafeArg(v.Name(), i)
@@ -1100,7 +1128,7 @@ func (sym *symtab) addSignatureType(pkg *types.Package, obj types.Object, t type
 			return err
 		}
 		py2g += bstr + retstr
-		py2g += fmt.Sprintf("C.PyObject_CallObject(_fun_arg, _fcargs)\n")
+		py2g += "C.PyObject_CallObject(_fun_arg, _fcargs)\n"
 		py2g += "C.gopy_decref(_fcargs)\n"
 	} else {
 		// TODO: methods not supported for no-args case -- requires self arg..
@@ -1243,7 +1271,6 @@ func (sym *symtab) print() {
 }
 
 func init() {
-
 	universe = newSymtab(nil, nil)
 	universe.parent = nil
 

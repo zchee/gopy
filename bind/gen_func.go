@@ -23,7 +23,7 @@ func (g *pyGen) recurse(gotype types.Type, prefix, name string) {
 		}
 		g.recurse(t.Underlying(), prefix, o.Pkg().Name()+"_"+o.Name())
 	case *types.Struct:
-		for i := 0; i < t.NumFields(); i++ {
+		for i := range t.NumFields() {
 			f := t.Field(i)
 			g.recurse(f.Type(), prefix, name+"_"+f.Name()+"_Get")
 		}
@@ -51,7 +51,7 @@ func (g *pyGen) genFuncSig(sym *symbol, fsym *Func) bool {
 	if err != nil {
 		return false
 	}
-	ifchandle, gdoc := isIfaceHandle(gdoc)
+	ifchandle, _ := isIfaceHandle(gdoc)
 
 	sig := fsym.sig
 	args := sig.Params()
@@ -80,7 +80,7 @@ func (g *pyGen) genFuncSig(sym *symbol, fsym *Func) bool {
 	}
 
 	nargs = len(args)
-	for i := 0; i < nargs; i++ {
+	for i := range nargs {
 		arg := args[i]
 		sarg := current.symtype(arg.GoType())
 		if sarg == nil {
@@ -170,7 +170,7 @@ func (g *pyGen) genFuncSig(sym *symbol, fsym *Func) bool {
 		} else {
 			g.pybuild.Printf("retval('%s')", sret.cpyname)
 		}
-		goRet = fmt.Sprintf("%s", sret.cgoname)
+		goRet = fmt.Sprint(sret.cgoname)
 	} else {
 		g.pybuild.Printf("None")
 	}
@@ -305,7 +305,7 @@ if __err != nil {
 		case ifchandle && arg.sym.goname == "interface{}":
 			na = fmt.Sprintf(`gopyh.VarFromHandle((gopyh.CGoHandle)(%s), "interface{}")`, anm)
 		case arg.sym.isSignature():
-			na = fmt.Sprintf("%s", arg.sym.py2go)
+			na = fmt.Sprint(arg.sym.py2go)
 		case arg.sym.py2go != "":
 			na = fmt.Sprintf("%s(%s)%s", arg.sym.py2go, anm, arg.sym.py2goParenEx)
 		default:

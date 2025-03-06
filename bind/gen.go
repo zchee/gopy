@@ -28,9 +28,9 @@ type BuildMode string
 
 const (
 	ModeGen   BuildMode = "gen"
-	ModeBuild           = "build"
-	ModeExe             = "exe"
-	ModePkg             = "pkg"
+	ModeBuild BuildMode = "build"
+	ModeExe   BuildMode = "exe"
+	ModePkg   BuildMode = "pkg"
 )
 
 // set this to true if OS is windows
@@ -484,8 +484,7 @@ type pyGen struct {
 
 func (g *pyGen) gen() error {
 	g.pkg = nil
-	err := os.MkdirAll(g.cfg.OutputDir, 0755)
-	if err != nil {
+	if err := os.MkdirAll(g.cfg.OutputDir, 0o755); err != nil {
 		return fmt.Errorf("gopy: could not create output directory: %v", err)
 	}
 
