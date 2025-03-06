@@ -6,8 +6,9 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"io"
-	"log"
 	"os"
 	"path"
 
@@ -40,6 +41,36 @@ func NewBuildCfg() *BuildCfg {
 	return &cfg
 }
 
+func main() {
+	commander := subcommands.NewCommander(flag.CommandLine, path.Base(os.Args[0]))
+	commander.Explain = func(w io.Writer) {
+		fmt.Fprintf(w, `gopy generates a CPython extension module from a go package.`)
+	}
+	subcommands.Register(subcommands.FlagsCommand(), "")
+	subcommands.Register(subcommands.CommandsCommand(), "")
+	subcommands.Register(&gopyCmd{}, "gopy")
+	flag.Parse()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	os.Exit(int(subcommands.Execute(ctx)))
+}
+
+func (c *gopyCmd) Execute(ctx context.Context, f *flag.FlagSet, args ...any) subcommands.ExitStatus {
+	gopyMakeCmdGen()
+	gopyMakeCmdBuild()
+	gopyMakeCmdPkg()
+	gopyMakeCmdExe()
+	appArgs := f.Args()
+	if status := c.Execute(ctx, f, appArgs); !isSuccess(status) {
+		fmt.Errorf("error dispatching command: %v", err)
+		return subcommands.ExitFailure
+	}
+
+	return subcommands.ExitSuccess
+}
+
 func run(ctx context.Context, args []string) error {
 	// app := &commander.Command{
 	// 	UsageLine: "gopy",
@@ -63,20 +94,6 @@ func run(ctx context.Context, args []string) error {
 	// 	return fmt.Errorf("error dispatching command: %v", err)
 	// }
 	return nil
-}
-
-func main() {
-	subcommands.Register(subcommands.HelpCommand(), "")
-	subcommands.Register(subcommands.FlagsCommand(), "")
-	subcommands.Register(subcommands.CommandsCommand(), "")
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	err := run(ctx, os.Args[1:])
-	if err != nil {
-		log.Fatal(err)
-	}
-	os.Exit(0)
 }
 
 func copyCmd(src, dst string) error {

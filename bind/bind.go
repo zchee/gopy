@@ -56,7 +56,7 @@ const (
 	doDebug = true
 )
 
-func debugf(format string, args ...interface{}) (int, error) {
+func debugf(format string, args ...any) (int, error) {
 	if doDebug {
 		return fmt.Fprintf(os.Stderr, format, args...)
 	}

@@ -25,20 +25,22 @@ import (
 )
 
 // GoHandle is the type for the handle
-type GoHandle int64
-type CGoHandle int64
+type (
+	GoHandle  int64
+	CGoHandle int64
+)
 
 // --- variable handles: all pointers managed via handles ---
 
 var (
 	mu      sync.RWMutex
 	ctr     int64
-	handles map[GoHandle]interface{}
+	handles map[GoHandle]any
 	counts  map[GoHandle]int64
 )
 
 // IfaceIsNil returns true if interface or value represented by interface is nil
-func IfaceIsNil(it interface{}) bool {
+func IfaceIsNil(it any) bool {
 	if it == nil {
 		return true
 	}
@@ -68,7 +70,7 @@ func PtrValue(v reflect.Value) reflect.Value {
 }
 
 // Embed returns the embedded struct (in first field only) of given type within given struct
-func Embed(stru interface{}, embed reflect.Type) interface{} {
+func Embed(stru any, embed reflect.Type) any {
 	if IfaceIsNil(stru) {
 		return nil
 	}
@@ -95,9 +97,7 @@ func Embed(stru interface{}, embed reflect.Type) interface{} {
 	return nil
 }
 
-var (
-	trace = false
-)
+var trace = false
 
 func init() {
 	if len(os.Getenv("GOPY_HANDLE_TRACE")) > 0 {
@@ -106,14 +106,14 @@ func init() {
 }
 
 // Register registers a new variable instance.
-func Register(typnm string, ifc interface{}) CGoHandle {
+func Register(typnm string, ifc any) CGoHandle {
 	if IfaceIsNil(ifc) {
 		return -1
 	}
 	mu.Lock()
 	defer mu.Unlock()
 	if handles == nil {
-		handles = make(map[GoHandle]interface{})
+		handles = make(map[GoHandle]any)
 		counts = make(map[GoHandle]int64)
 	}
 	ctr++
@@ -173,20 +173,19 @@ func IncRef(handle CGoHandle) {
 			fmt.Printf("gopy IncRef: %d: %d\n", handle, counts[ghc])
 		}
 	}
-
 }
 
 // VarFromHandle gets variable from handle string.
 // Reports error to python but does not return it,
 // for use in inline calls
-func VarFromHandle(h CGoHandle, typnm string) interface{} {
+func VarFromHandle(h CGoHandle, typnm string) any {
 	v, _ := VarFromHandleTry(h, typnm)
 	return v
 }
 
 // VarFromHandleTry version returns the error explicitly,
 // for use when error can be processed
-func VarFromHandleTry(h CGoHandle, typnm string) (interface{}, error) {
+func VarFromHandleTry(h CGoHandle, typnm string) (any, error) {
 	if h < 1 {
 		return nil, fmt.Errorf("gopy: nil handle")
 	}
@@ -194,7 +193,7 @@ func VarFromHandleTry(h CGoHandle, typnm string) (interface{}, error) {
 	defer mu.RUnlock()
 	v, has := handles[GoHandle(h)]
 	if !has {
-		err := fmt.Errorf("gopy: variable handle not registered: " + strconv.FormatInt(int64(h), 10))
+		err := fmt.Errorf("gopy: variable handle not registered: %s", strconv.FormatInt(int64(h), 10))
 		// TODO: need to get access to this:
 		// C.PyErr_SetString(C.PyExc_TypeError, C.CString(err.Error()))
 		return nil, err

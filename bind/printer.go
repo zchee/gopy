@@ -54,7 +54,7 @@ func (p *printer) Write(b []byte) (n int, err error) {
 	return wrote, err
 }
 
-func (p *printer) Printf(format string, args ...interface{}) {
+func (p *printer) Printf(format string, args ...any) {
 	if _, err := fmt.Fprintf(p, format, args...); err != nil {
 		panic(fmt.Sprintf("printer: %v", err))
 	}

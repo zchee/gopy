@@ -157,12 +157,11 @@ in which case a new Go object is constructed first
 	g.gofile.Printf("}\n")
 
 	g.pybuild.Printf("mod.add_function('%s', retval('%s'), [])\n", ctNm, PyHandle)
-
 }
 
 func (g *pyGen) genStructMembers(s *Struct) {
 	typ := s.Struct()
-	for i := 0; i < typ.NumFields(); i++ {
+	for i := range typ.NumFields() {
 		f := typ.Field(i)
 		ftyp, err := isPyCompatField(f)
 		if err != nil {
@@ -199,7 +198,7 @@ func (g *pyGen) genStructMemberGetter(s *Struct, i int, f types.Object) {
 	g.pywrap.Indent()
 	if gdoc := g.pkg.getDoc(s.Obj().Name(), f); gdoc != "" {
 		g.pywrap.Printf(`"""`)
-		g.pywrap.Printf(gdoc)
+		g.pywrap.Println(gdoc)
 		g.pywrap.Println(`"""`)
 	}
 	if ret.hasHandle() {

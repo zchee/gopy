@@ -17,39 +17,38 @@ import (
 	"strings"
 
 	"github.com/go-python/gopy/bind"
+	"github.com/google/subcommands"
 )
 
-func gopyMakeCmdBuild() *commander.Command {
-	cmd := &commander.Command{
+func gopyMakeCmdBuild() *subcommands.Command {
+	commander := &subcommands.Command{
 		Run:       gopyRunCmdBuild,
 		UsageLine: "build <go-package-name> [other-go-package...]",
 		Short:     "generate and compile (C)Python language bindings for Go",
-		Long: `
-build generates and compiles (C)Python language bindings for Go package(s).
-
-ex:
- $ gopy build [options] <go-package-name> [other-go-package...]
- $ gopy build github.com/go-python/gopy/_examples/hi
-`,
-		Flag: *flag.NewFlagSet("gopy-build", flag.ExitOnError),
+		Long:      `gopy generates a CPython extension module from a go package.`,
+		Flag:      *flag.NewFlagSet("gopy-build", flag.ExitOnError),
 	}
 
-	cmd.Flag.String("vm", "python", "path to python interpreter")
-	cmd.Flag.String("output", "", "output directory for bindings")
-	cmd.Flag.String("name", "", "name of output package (otherwise name of first package is used)")
-	cmd.Flag.String("main", "", "code string to run in the go main() function in the cgo library")
-	cmd.Flag.String("package-prefix", ".", "custom package prefix used when generating import "+
+	// Prepend general documentation before the regular help output.
+	defaultExplain := commander.Explain
+	commander.Explain := commander.Explain
+
+	commander.Flag.String("vm", "python", "path to python interpreter")
+	commander.Flag.String("output", "", "output directory for bindings")
+	commander.Flag.String("name", "", "name of output package (otherwise name of first package is used)")
+	commander.Flag.String("main", "", "code string to run in the go main() function in the cgo library")
+	commander.Flag.String("package-prefix", ".", "custom package prefix used when generating import "+
 		"statements for generated package")
-	cmd.Flag.Bool("rename", false, "rename Go symbols to python PEP snake_case")
-	cmd.Flag.Bool("symbols", true, "include symbols in output")
-	cmd.Flag.Bool("no-warn", false, "suppress warning messages, which may be expected")
-	cmd.Flag.Bool("no-make", false, "do not generate a Makefile, e.g., when called from Makefile")
-	cmd.Flag.Bool("dynamic-link", false, "whether to link output shared library dynamically to Python")
-	cmd.Flag.String("build-tags", "", "build tags to be passed to `go build`")
-	return cmd
+	commander.Flag.Bool("rename", false, "rename Go symbols to python PEP snake_case")
+	commander.Flag.Bool("symbols", true, "include symbols in output")
+	commander.Flag.Bool("no-warn", false, "suppress warning messages, which may be expected")
+	commander.Flag.Bool("no-make", false, "do not generate a Makefile, e.g., when called from Makefile")
+	commander.Flag.Bool("dynamic-link", false, "whether to link output shared library dynamically to Python")
+	commander.Flag.String("build-tags", "", "build tags to be passed to `go build`")
+	return commander
 }
 
-func gopyRunCmdBuild(cmdr *commander.Command, args []string) error {
+func gopyRunCmdBuild(cmdr *subcommands.Command, args []string) error {
 	if len(args) == 0 {
 		err := fmt.Errorf("gopy: expect a fully qualified go package name as argument")
 		log.Println(err)
