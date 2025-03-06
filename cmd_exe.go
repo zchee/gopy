@@ -5,15 +5,16 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/go-python/gopy/bind"
 	"github.com/gonuts/commander"
-	"github.com/gonuts/flag"
 )
 
 // python packaging links:
@@ -72,27 +73,27 @@ func gopyRunCmdExe(cmdr *commander.Command, args []string) error {
 	}
 
 	cfg := NewBuildCfg()
-	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.Get().(string)
-	cfg.Name = cmdr.Flag.Lookup("name").Value.Get().(string)
-	cfg.Main = cmdr.Flag.Lookup("main").Value.Get().(string)
-	cfg.VM = cmdr.Flag.Lookup("vm").Value.Get().(string)
+	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.String()
+	cfg.Name = cmdr.Flag.Lookup("name").Value.String()
+	cfg.Main = cmdr.Flag.Lookup("main").Value.String()
+	cfg.VM = cmdr.Flag.Lookup("vm").Value.String()
 	// cfg.PkgPrefix = cmdr.Flag.Lookup("package-prefix").Value.Get().(string)
 	cfg.PkgPrefix = "" // doesn't make sense for exe
-	cfg.RenameCase = cmdr.Flag.Lookup("rename").Value.Get().(bool)
-	cfg.Symbols = cmdr.Flag.Lookup("symbols").Value.Get().(bool)
-	cfg.NoWarn = cmdr.Flag.Lookup("no-warn").Value.Get().(bool)
-	cfg.NoMake = cmdr.Flag.Lookup("no-make").Value.Get().(bool)
-	cfg.DynamicLinking = cmdr.Flag.Lookup("dynamic-link").Value.Get().(bool)
-	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.Get().(string)
+	cfg.RenameCase, _ = strconv.ParseBool(cmdr.Flag.Lookup("rename").Value.String())
+	cfg.Symbols, _ = strconv.ParseBool(cmdr.Flag.Lookup("symbols").Value.String())
+	cfg.NoWarn, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-warn").Value.String())
+	cfg.NoMake, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-make").Value.String())
+	cfg.DynamicLinking, _ = strconv.ParseBool(cmdr.Flag.Lookup("dynamic-link").Value.String())
+	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.String()
 
 	var (
-		exclude = cmdr.Flag.Lookup("exclude").Value.Get().(string)
-		user    = cmdr.Flag.Lookup("user").Value.Get().(string)
-		version = cmdr.Flag.Lookup("version").Value.Get().(string)
-		author  = cmdr.Flag.Lookup("author").Value.Get().(string)
-		email   = cmdr.Flag.Lookup("email").Value.Get().(string)
-		desc    = cmdr.Flag.Lookup("desc").Value.Get().(string)
-		url     = cmdr.Flag.Lookup("url").Value.Get().(string)
+		exclude = cmdr.Flag.Lookup("exclude").Value.String()
+		user    = cmdr.Flag.Lookup("user").Value.String()
+		version = cmdr.Flag.Lookup("version").Value.String()
+		author  = cmdr.Flag.Lookup("author").Value.String()
+		email   = cmdr.Flag.Lookup("email").Value.String()
+		desc    = cmdr.Flag.Lookup("desc").Value.String()
+		url     = cmdr.Flag.Lookup("url").Value.String()
 	)
 
 	bind.NoWarn = cfg.NoWarn

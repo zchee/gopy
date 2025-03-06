@@ -5,6 +5,8 @@
 package main
 
 import (
+	"context"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -12,7 +14,6 @@ import (
 	"path"
 
 	"github.com/gonuts/commander"
-	"github.com/gonuts/flag"
 	"github.com/pkg/errors"
 
 	"github.com/go-python/gopy/bind"
@@ -41,7 +42,7 @@ func NewBuildCfg() *BuildCfg {
 	return &cfg
 }
 
-func run(args []string) error {
+func run(ctx context.Context, args []string) error {
 	app := &commander.Command{
 		UsageLine: "gopy",
 		Subcommands: []*commander.Command{
@@ -59,7 +60,7 @@ func run(args []string) error {
 	}
 
 	appArgs := app.Flag.Args()
-	err = app.Dispatch(appArgs)
+	err = app.Dispatch(ctx, appArgs)
 	if err != nil {
 		return fmt.Errorf("error dispatching command: %v", err)
 	}
@@ -67,7 +68,9 @@ func run(args []string) error {
 }
 
 func main() {
-	err := run(os.Args[1:])
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	err := run(ctx, os.Args[1:])
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -81,7 +84,7 @@ func copyCmd(src, dst string) error {
 	}
 	defer srcf.Close()
 
-	os.MkdirAll(path.Dir(dst), 0755)
+	os.MkdirAll(path.Dir(dst), 0o755)
 
 	dstf, err := os.Create(dst)
 	if err != nil {

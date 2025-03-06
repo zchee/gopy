@@ -6,16 +6,17 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 
 	"github.com/gonuts/commander"
-	"github.com/gonuts/flag"
 
 	"github.com/go-python/gopy/bind"
 )
@@ -58,17 +59,17 @@ func gopyRunCmdBuild(cmdr *commander.Command, args []string) error {
 	}
 
 	cfg := NewBuildCfg()
-	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.Get().(string)
-	cfg.Name = cmdr.Flag.Lookup("name").Value.Get().(string)
-	cfg.Main = cmdr.Flag.Lookup("main").Value.Get().(string)
-	cfg.VM = cmdr.Flag.Lookup("vm").Value.Get().(string)
-	cfg.PkgPrefix = cmdr.Flag.Lookup("package-prefix").Value.Get().(string)
-	cfg.RenameCase = cmdr.Flag.Lookup("rename").Value.Get().(bool)
-	cfg.Symbols = cmdr.Flag.Lookup("symbols").Value.Get().(bool)
-	cfg.NoWarn = cmdr.Flag.Lookup("no-warn").Value.Get().(bool)
-	cfg.NoMake = cmdr.Flag.Lookup("no-make").Value.Get().(bool)
-	cfg.DynamicLinking = cmdr.Flag.Lookup("dynamic-link").Value.Get().(bool)
-	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.Get().(string)
+	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.String()
+	cfg.Name = cmdr.Flag.Lookup("name").Value.String()
+	cfg.Main = cmdr.Flag.Lookup("main").Value.String()
+	cfg.VM = cmdr.Flag.Lookup("vm").Value.String()
+	cfg.PkgPrefix = cmdr.Flag.Lookup("package-prefix").Value.String()
+	cfg.RenameCase, _ = strconv.ParseBool(cmdr.Flag.Lookup("rename").Value.String())
+	cfg.Symbols, _ = strconv.ParseBool(cmdr.Flag.Lookup("symbols").Value.String())
+	cfg.NoWarn, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-warn").Value.String())
+	cfg.NoMake, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-make").Value.String())
+	cfg.DynamicLinking, _ = strconv.ParseBool(cmdr.Flag.Lookup("dynamic-link").Value.String())
+	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.String()
 
 	bind.NoWarn = cfg.NoWarn
 	bind.NoMake = cfg.NoMake
@@ -223,7 +224,7 @@ func runBuild(mode bind.BuildMode, cfg *BuildCfg) error {
 				return fmt.Errorf("could not read %s: %w", fname, err)
 			}
 			raw = bytes.ReplaceAll(raw, []byte(" PyInit_"), []byte(" __declspec(dllexport) PyInit_"))
-			err = os.WriteFile(fname, raw, 0644)
+			err = os.WriteFile(fname, raw, 0o644)
 			if err != nil {
 				fmt.Printf("could not apply sed hack to fix declspec for PyInit: %+v", err)
 				return fmt.Errorf("could not apply sed hack to fix PyInit: %w", err)
@@ -231,7 +232,7 @@ func runBuild(mode bind.BuildMode, cfg *BuildCfg) error {
 		}
 
 		cflags := strings.Fields(strings.TrimSpace(pycfg.CFlags))
-		cflags = append(cflags, "-fPIC", "-Ofast")
+		cflags = append(cflags, "-fPIC", "-O3", "-ffast-math")
 		if include, exists := os.LookupEnv("GOPY_INCLUDE"); exists {
 			cflags = append(cflags, "-I"+filepath.ToSlash(include))
 		}
