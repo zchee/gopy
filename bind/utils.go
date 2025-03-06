@@ -17,7 +17,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/go-faster/errors"
 )
 
 func isErrorType(typ types.Type) bool {

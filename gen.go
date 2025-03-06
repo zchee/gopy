@@ -16,7 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/go-faster/errors"
 	"golang.org/x/tools/go/packages"
 
 	"github.com/go-python/gopy/bind"

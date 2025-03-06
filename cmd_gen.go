@@ -11,7 +11,6 @@ import (
 	"strconv"
 
 	"github.com/go-python/gopy/bind"
-	"github.com/gonuts/commander"
 )
 
 func gopyMakeCmdGen() *commander.Command {

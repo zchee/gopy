@@ -6,15 +6,13 @@ package main
 
 import (
 	"context"
-	"flag"
-	"fmt"
 	"io"
 	"log"
 	"os"
 	"path"
 
-	"github.com/gonuts/commander"
-	"github.com/pkg/errors"
+	"github.com/go-faster/errors"
+	"github.com/google/subcommands"
 
 	"github.com/go-python/gopy/bind"
 )
@@ -43,31 +41,35 @@ func NewBuildCfg() *BuildCfg {
 }
 
 func run(ctx context.Context, args []string) error {
-	app := &commander.Command{
-		UsageLine: "gopy",
-		Subcommands: []*commander.Command{
-			gopyMakeCmdGen(),
-			gopyMakeCmdBuild(),
-			gopyMakeCmdPkg(),
-			gopyMakeCmdExe(),
-		},
-		Flag: *flag.NewFlagSet("gopy", flag.ExitOnError),
-	}
+	// app := &commander.Command{
+	// 	UsageLine: "gopy",
+	// 	Subcommands: []*commander.Command{
+	// 		gopyMakeCmdGen(),
+	// 		gopyMakeCmdBuild(),
+	// 		gopyMakeCmdPkg(),
+	// 		gopyMakeCmdExe(),
+	// 	},
+	// 	Flag: *flag.NewFlagSet("gopy", flag.ExitOnError),
+	// }
 
-	err := app.Flag.Parse(args)
-	if err != nil {
-		return fmt.Errorf("could not parse flags: %v", err)
-	}
-
-	appArgs := app.Flag.Args()
-	err = app.Dispatch(ctx, appArgs)
-	if err != nil {
-		return fmt.Errorf("error dispatching command: %v", err)
-	}
+	// err := app.Flag.Parse(args)
+	// if err != nil {
+	// 	return fmt.Errorf("could not parse flags: %v", err)
+	// }
+	//
+	// appArgs := app.Flag.Args()
+	// err = app.Dispatch(ctx, appArgs)
+	// if err != nil {
+	// 	return fmt.Errorf("error dispatching command: %v", err)
+	// }
 	return nil
 }
 
 func main() {
+	subcommands.Register(subcommands.HelpCommand(), "")
+	subcommands.Register(subcommands.FlagsCommand(), "")
+	subcommands.Register(subcommands.CommandsCommand(), "")
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	err := run(ctx, os.Args[1:])

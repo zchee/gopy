@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/go-python/gopy/bind"
-	"github.com/gonuts/commander"
 )
 
 // python packaging links:

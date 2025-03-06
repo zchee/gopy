@@ -6,10 +6,11 @@ package bind
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
+
+	"github.com/go-faster/errors"
 )
 
 // BindCfg is a configuration used during binding generation

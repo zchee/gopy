@@ -5,8 +5,9 @@
 package bind
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/go-faster/errors"
 )
 
 func TestGetGoVersion(t *testing.T) {

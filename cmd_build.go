@@ -16,8 +16,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/gonuts/commander"
-
 	"github.com/go-python/gopy/bind"
 )
 

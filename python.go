@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/go-faster/errors"
 )
 
 // getPythonVersion returns the python version available on this machine
