@@ -19,13 +19,13 @@ func (fs *FunStruct) CallBack(i int, fun func(fs *FunStruct, i int, s string)) {
 	fun(fs, i, fs.FieldS)
 }
 
-type RecvFunc func(fs *FunStruct, i int, v interface{})
+type RecvFunc func(fs *FunStruct, i int, v any)
 
 func (fs *FunStruct) CallBackIf(i int, fun RecvFunc) {
 	fun(fs, i, fs.FieldS)
 }
 
-func (fs *FunStruct) CallBackRval(i int, fun func(fs *FunStruct, i int, v interface{}) bool) {
+func (fs *FunStruct) CallBackRval(i int, fun func(fs *FunStruct, i int, v any) bool) {
 	rv := fun(fs, i, fs.FieldS)
 	fmt.Printf("got return value: %v\n", rv)
 }

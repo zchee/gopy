@@ -33,7 +33,7 @@ type SliceInt64 []int64
 
 type SliceComplex []complex128
 
-type SliceIface []interface{}
+type SliceIface []any
 
 type S struct {
 	Name string

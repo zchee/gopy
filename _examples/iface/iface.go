@@ -32,12 +32,12 @@ func CallIface(v Iface) {
 }
 
 // by default, interface{} is converted to string (most universal type)
-func IfaceString(str interface{}) {
+func IfaceString(str any) {
 	cpkg.Printf("iface as string: %v\n", str)
 }
 
 // gopy:interface=handle
 // this magic directive says, treat the interface arg as a handle
-func IfaceHandle(ifc interface{}) {
+func IfaceHandle(ifc any) {
 	cpkg.Printf("iface as handle: %v\n", ifc)
 }

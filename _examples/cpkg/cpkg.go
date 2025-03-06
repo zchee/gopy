@@ -36,7 +36,7 @@ func Hello(s string) {
 }
 
 // Printf prints a string via C's stdio
-func Printf(format string, args ...interface{}) {
+func Printf(format string, args ...any) {
 	str := fmt.Sprintf(format, args...)
 	cstr := C.CString(str)
 	defer C.free(unsafe.Pointer(cstr))
