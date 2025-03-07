@@ -139,7 +139,7 @@ func GenPyPkgSetup(cfg *BuildCfg, user, version, author, email, desc, url string
 	if err != nil {
 		return err
 	}
-	fmt.Fprintf(mi, manifestTempl)
+	fmt.Fprint(mi, manifestTempl)
 	mi.Close()
 
 	lf, err := os.Create(filepath.Join(cfg.OutputDir, "LICENSE"))

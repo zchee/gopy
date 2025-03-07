@@ -7,12 +7,10 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
-	"io"
+	"log/slog"
 	"os"
 	"path"
 
-	"github.com/go-faster/errors"
 	"github.com/google/subcommands"
 
 	"github.com/go-python/gopy/bind"
@@ -43,83 +41,24 @@ func NewBuildCfg() *BuildCfg {
 
 func main() {
 	commander := subcommands.NewCommander(flag.CommandLine, path.Base(os.Args[0]))
-	commander.Explain = func(w io.Writer) {
-		fmt.Fprintf(w, `gopy generates a CPython extension module from a go package.`)
-	}
-	subcommands.Register(subcommands.FlagsCommand(), "")
-	subcommands.Register(subcommands.CommandsCommand(), "")
-	subcommands.Register(&gopyCmd{}, "gopy")
-	flag.Parse()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	os.Exit(int(subcommands.Execute(ctx)))
-}
+	log := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelDebug,
+	}))
+	ctx = IntoContext(ctx, log)
 
-func (c *gopyCmd) Execute(ctx context.Context, f *flag.FlagSet, args ...any) subcommands.ExitStatus {
-	gopyMakeCmdGen()
-	gopyMakeCmdBuild()
-	gopyMakeCmdPkg()
-	gopyMakeCmdExe()
-	appArgs := f.Args()
-	if status := c.Execute(ctx, f, appArgs); !isSuccess(status) {
-		fmt.Errorf("error dispatching command: %v", err)
-		return subcommands.ExitFailure
-	}
+	commander.Register(commander.FlagsCommand(), "")
+	commander.Register(commander.CommandsCommand(), "")
+	commander.Register(commander.HelpCommand(), "")
+	commander.Register(NewGenCmd(ctx), "gopy")
+	commander.Register(NewBuildCmd(ctx), "gopy")
+	commander.Register(NewExeCmd(ctx), "gopy")
+	commander.Register(NewPkgCmd(ctx), "gopy")
 
-	return subcommands.ExitSuccess
-}
+	flag.Parse()
 
-func run(ctx context.Context, args []string) error {
-	// app := &commander.Command{
-	// 	UsageLine: "gopy",
-	// 	Subcommands: []*commander.Command{
-	// 		gopyMakeCmdGen(),
-	// 		gopyMakeCmdBuild(),
-	// 		gopyMakeCmdPkg(),
-	// 		gopyMakeCmdExe(),
-	// 	},
-	// 	Flag: *flag.NewFlagSet("gopy", flag.ExitOnError),
-	// }
-
-	// err := app.Flag.Parse(args)
-	// if err != nil {
-	// 	return fmt.Errorf("could not parse flags: %v", err)
-	// }
-	//
-	// appArgs := app.Flag.Args()
-	// err = app.Dispatch(ctx, appArgs)
-	// if err != nil {
-	// 	return fmt.Errorf("error dispatching command: %v", err)
-	// }
-	return nil
-}
-
-func copyCmd(src, dst string) error {
-	srcf, err := os.Open(src)
-	if err != nil {
-		return errors.Wrap(err, "could not open source for copy")
-	}
-	defer srcf.Close()
-
-	os.MkdirAll(path.Dir(dst), 0o755)
-
-	dstf, err := os.Create(dst)
-	if err != nil {
-		return errors.Wrap(err, "could not create destination for copy")
-	}
-	defer dstf.Close()
-
-	_, err = io.Copy(dstf, srcf)
-	if err != nil {
-		return errors.Wrap(err, "could not copy bytes to destination")
-	}
-
-	err = dstf.Sync()
-	if err != nil {
-		return errors.Wrap(err, "could not synchronize destination")
-	}
-
-	return dstf.Close()
+	os.Exit(int(commander.Execute(ctx)))
 }

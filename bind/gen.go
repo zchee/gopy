@@ -270,17 +270,13 @@ mod.add_function('NumHandles', retval('int'), [])
 # %[2]s
 
 # the following is required to enable dlopen to open the _go.so file
-import os,sys,inspect,collections
+import collections
 try:
 	import collections.abc as _collections_abc
 except ImportError:
 	_collections_abc = collections
 
-cwd = os.getcwd()
-currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-os.chdir(currentdir)
 %[6]s
-os.chdir(cwd)
 
 # to use this code in your end-user python file, import it as follows:
 # from %[1]s import %[3]s
@@ -644,6 +640,13 @@ func (g *pyGen) genPyWrapPreamble() {
 	// import other packages for other types that we might use
 	var impstr, impgenstr string
 	impgenNames := []string{"_" + g.cfg.Name, "go"}
+
+	if g.cfg.PkgPrefix == "." {
+		if abs, err := filepath.Abs(g.cfg.OutputDir); err == nil {
+			g.cfg.PkgPrefix = filepath.Base(abs)
+		}
+	}
+
 	switch {
 	case g.pkg.Name() == "go":
 		if g.cfg.PkgPrefix != "" {
@@ -665,7 +668,7 @@ func (g *pyGen) genPyWrapPreamble() {
 	case g.mode == ModeExe:
 		// exe mode ignores PkgPrefix, because it is always built in to exe
 		impgenstr += fmt.Sprintf("import _%s\n", g.cfg.Name)
-		impgenstr += fmt.Sprintf("from %s import go\n", g.cfg.Name)
+		impgenstr += fmt.Sprintf("from %s import go\n", g.cfg.PkgPrefix)
 	default:
 		pkg := g.cfg.Name
 		if g.cfg.PkgPrefix != "" {

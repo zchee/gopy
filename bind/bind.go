@@ -56,7 +56,6 @@ const (
 	doDebug = true
 )
 
-//nolint:unused
 func debugf(format string, args ...any) (int, error) {
 	if doDebug {
 		return fmt.Fprintf(os.Stderr, format, args...)

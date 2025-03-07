@@ -5,15 +5,16 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/go-python/gopy/bind"
+	"github.com/google/subcommands"
 )
 
 // python packaging links:
@@ -21,88 +22,114 @@ import (
 // https://packaging.python.org/tutorials/packaging-projects/
 // https://docs.python.org/3/tutorial/modules.html
 
-func gopyMakeCmdPkg() *commander.Command {
-	cmd := &commander.Command{
-		Run:       gopyRunCmdPkg,
-		UsageLine: "pkg <go-package-name> [other-go-package...]",
-		Short:     "generate and compile (C)Python language bindings for Go, and make a python package",
-		Long: `
-pkg generates and compiles (C)Python language bindings for a Go package, including subdirectories, and generates python module packaging suitable for distribution.  if setup.py file does not yet exist in the target directory, then it along with other default packaging files are created, using arguments.  Typically you create initial default versions of these files and then edit them, and after that, only regenerate the go binding files.
+const (
+	pkgCmdName     = `pkg`
+	pkgCmdSynopsis = `generate and compile (C)Python language bindings for Go, and make a python package.`
+)
 
-When including multiple packages, list in order of increasing dependency, and use -name arg to give appropriate name.
+type pkgCmd struct {
+	*baseCmd
 
-ex:
- $ gopy pkg [options] <go-package-name> [other-go-package...]
- $ gopy pkg github.com/go-python/gopy/_examples/hi
-`,
-		Flag: *flag.NewFlagSet("gopy-pkg", flag.ExitOnError),
-	}
-
-	cmd.Flag.String("vm", "python", "path to python interpreter")
-	cmd.Flag.String("output", "", "output directory for root of package")
-	cmd.Flag.String("name", "", "name of output package (otherwise name of first package is used)")
-	cmd.Flag.String("main", "", "code string to run in the go GoPyInit() function in the cgo library")
-	cmd.Flag.String("package-prefix", ".", "custom package prefix used when generating import "+
-		"statements for generated package")
-	cmd.Flag.Bool("rename", false, "rename Go symbols to python PEP snake_case")
-	cmd.Flag.Bool("symbols", true, "include symbols in output")
-	cmd.Flag.String("exclude", "", "comma-separated list of package names to exclude")
-	cmd.Flag.String("user", "", "username on https://www.pypa.io/en/latest/ for package name suffix")
-	cmd.Flag.String("version", "0.1.0", "semantic version number -- can use e.g., git to get this from tag and pass as argument")
-	cmd.Flag.String("author", "gopy", "author name")
-	cmd.Flag.String("email", "gopy@example.com", "author email")
-	cmd.Flag.String("desc", "", "short description of project (long comes from README.md)")
-	cmd.Flag.String("url", "https://github.com/go-python/gopy", "home page for project")
-	cmd.Flag.Bool("no-warn", false, "suppress warning messages, which may be expected")
-	cmd.Flag.Bool("no-make", false, "do not generate a Makefile, e.g., when called from Makefile")
-	cmd.Flag.Bool("dynamic-link", false, "whether to link output shared library dynamically to Python")
-	cmd.Flag.String("build-tags", "", "build tags to be passed to `go build`")
-
-	return cmd
+	exclude string
+	user    string
+	version string
+	author  string
+	email   string
+	desc    string
+	url     string
 }
 
-func gopyRunCmdPkg(cmdr *commander.Command, args []string) error {
-	if len(args) == 0 {
-		err := fmt.Errorf("gopy: expect a fully qualified go package name as argument")
-		log.Println(err)
-		return err
+var _ subcommands.Command = (*pkgCmd)(nil)
+
+func NewPkgCmd(ctx context.Context) *pkgCmd {
+	return &pkgCmd{
+		baseCmd: newBaseCmd(ctx),
+	}
+}
+
+// Name returns the name of the command.
+func (*pkgCmd) Name() string { return pkgCmdName }
+
+// Synopsis returns the synopsis of the command.
+func (*pkgCmd) Synopsis() string { return pkgCmdSynopsis }
+
+// Usage returns a long string explaining the command and giving usage information.
+func (*pkgCmd) Usage() string {
+	return `gopy pkg <go-package-name> [other-go-package...]
+
+Command pkg generates and compiles (C)Python language bindings for a Go package,
+including subdirectories, and generates python module packaging suitable for distribution.
+
+If setup.py file does not yet exist in the target directory, then it along
+with other default packaging files are created, using arguments.
+
+Typically you create initial default versions of these files and then edit them, and
+after that, only regenerate the go binding files.
+
+When including multiple packages, list in order of increasing dependency,
+and use -name arg to give appropriate name.
+
+Example:
+	gopy pkg github.com/go-python/gopy/_examples/hi
+
+`
+}
+
+// SetFlags adds the flags for this command to the specified set.
+func (c *pkgCmd) SetFlags(f *flag.FlagSet) {
+	c.newFlags(f)
+
+	f.StringVar(&c.user, "user", "", "username on https://www.pypa.io/en/latest/ for package name suffix")
+	f.StringVar(&c.version, "version", "0.1.0", "semantic version number")
+	f.StringVar(&c.author, "author", "gopy", "author name")
+	f.StringVar(&c.email, "email", "gopy@example.com", "author email")
+	f.StringVar(&c.desc, "desc", "", "short description of project (long comes from README.md)")
+	f.StringVar(&c.url, "url", "https://github.com/go-python/gopy", "home page for project")
+	f.StringVar(&c.exclude, "exclude", "", "comma-separated list of package names to exclude")
+}
+
+// Execute executes the pkg command and returns an [subcommands.ExitStatus].
+func (c *pkgCmd) Execute(ctx context.Context, f *flag.FlagSet, args ...any) subcommands.ExitStatus {
+	if len(f.Args()) == 0 {
+		c.log.Error("gopy-build: expect a fully qualified go package name as argument", slog.Any("args", f.Args()))
+		f.Usage()
+		return subcommands.ExitUsageError
 	}
 
 	cfg := NewBuildCfg()
-	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.String()
-	cfg.Name = cmdr.Flag.Lookup("name").Value.String()
-	cfg.Main = cmdr.Flag.Lookup("main").Value.String()
-	cfg.VM = cmdr.Flag.Lookup("vm").Value.String()
-	cfg.PkgPrefix = cmdr.Flag.Lookup("package-prefix").Value.String()
-	cfg.RenameCase, _ = strconv.ParseBool(cmdr.Flag.Lookup("rename").Value.String())
-	cfg.Symbols, _ = strconv.ParseBool(cmdr.Flag.Lookup("symbols").Value.String())
-	cfg.NoWarn, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-warn").Value.String())
-	cfg.NoMake, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-make").Value.String())
-	cfg.DynamicLinking, _ = strconv.ParseBool(cmdr.Flag.Lookup("dynamic-link").Value.String())
-	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.String()
+	cfg.OutputDir = c.output
+	cfg.Name = c.name
+	cfg.Main = c.main
+	cfg.VM = c.vm
+	cfg.PkgPrefix = c.packagePrefix
+	cfg.RenameCase = c.rename
+	cfg.Symbols = c.symbols
+	cfg.NoWarn = c.noWarn
+	cfg.NoMake = c.noMake
+	cfg.DynamicLinking = c.dynamicLink
+	cfg.BuildTags = c.buildTags
 
-	var (
-		exclude = cmdr.Flag.Lookup("exclude").Value.String()
-		user    = cmdr.Flag.Lookup("user").Value.String()
-		version = cmdr.Flag.Lookup("version").Value.String()
-		author  = cmdr.Flag.Lookup("author").Value.String()
-		email   = cmdr.Flag.Lookup("email").Value.String()
-		desc    = cmdr.Flag.Lookup("desc").Value.String()
-		url     = cmdr.Flag.Lookup("url").Value.String()
-	)
+	exclude := c.exclude
+	user := c.user
+	version := c.version
+	author := c.author
+	email := c.email
+	desc := c.desc
+	url := c.url
 
 	bind.NoWarn = cfg.NoWarn
 	bind.NoMake = cfg.NoMake
 
 	if cfg.Name == "" {
-		path := args[0]
+		path := f.Args()[0]
 		_, cfg.Name = filepath.Split(path)
 	}
 
 	var err error
 	cfg.OutputDir, err = genOutDir(cfg.OutputDir)
 	if err != nil {
-		return err
+		c.log.Error("gopy-pkg: generate output directory", slog.String("output directory", cfg.OutputDir))
+		return subcommands.ExitUsageError
 	}
 
 	setupfn := filepath.Join(cfg.OutputDir, "setup.py")
@@ -110,7 +137,8 @@ func gopyRunCmdPkg(cmdr *commander.Command, args []string) error {
 	if _, err = os.Stat(setupfn); os.IsNotExist(err) {
 		err = GenPyPkgSetup(cfg, user, version, author, email, desc, url)
 		if err != nil {
-			return err
+			c.log.Error("gopy-pkg: generate output directory", slog.String("output directory", cfg.OutputDir))
+			return subcommands.ExitUsageError
 		}
 	}
 
@@ -125,13 +153,20 @@ func gopyRunCmdPkg(cmdr *commander.Command, args []string) error {
 	cfg.OutputDir = filepath.Join(cfg.OutputDir, cfg.Name) // package must be in subdir
 	cfg.OutputDir, err = genOutDir(cfg.OutputDir)
 	if err != nil {
-		return err
+		c.log.Error("gopy-pkg: generate output directory", slog.Any("err", err))
+		return subcommands.ExitFailure
 	}
 
-	for _, path := range args {
+	for _, path := range f.Args() {
 		buildPkgRecurse(cfg.OutputDir, path, path, exmap, cfg.BuildTags)
 	}
-	return runBuild(bind.ModePkg, cfg)
+
+	if err := c.runBuild(ctx, bind.ModePkg, cfg); err != nil {
+		c.log.Error("gopy-pkg: build of package", slog.Any("err", err))
+		return subcommands.ExitFailure
+	}
+
+	return subcommands.ExitSuccess
 }
 
 func buildPkgRecurse(odir, path, rootpath string, exmap map[string]struct{}, buildTags string) error {

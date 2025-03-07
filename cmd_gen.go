@@ -5,89 +5,102 @@
 package main
 
 import (
+	"context"
 	"flag"
-	"fmt"
-	"log"
-	"strconv"
+	"log/slog"
 
 	"github.com/go-python/gopy/bind"
+	"github.com/google/subcommands"
 )
 
-func gopyMakeCmdGen() *commander.Command {
-	cmd := &commander.Command{
-		Run:       gopyRunCmdGen,
-		UsageLine: "gen <go-package-name> [other-go-package...]",
-		Short:     "generate (C)Python language bindings for Go",
-		Long: `
-gen generates (C)Python language bindings for Go package(s).
+const (
+	genCmdName     = `gen`
+	genCmdSynopsis = `generate (C)Python language bindings for Go.`
+)
 
-ex:
- $ gopy gen [options] <go-package-name> [other-go-package...]
- $ gopy gen github.com/go-python/gopy/_examples/hi
-`,
-		Flag: *flag.NewFlagSet("gopy-gen", flag.ExitOnError),
-	}
-
-	cmd.Flag.String("vm", "python", "path to python interpreter")
-	cmd.Flag.String("output", "", "output directory for bindings")
-	cmd.Flag.String("name", "", "name of output package (otherwise name of first package is used)")
-	cmd.Flag.String("main", "", "code string to run in the go main() function in the cgo library")
-	cmd.Flag.String("package-prefix", ".", "custom package prefix used when generating import "+
-		"statements for generated package")
-	cmd.Flag.Bool("rename", false, "rename Go symbols to python PEP snake_case")
-	cmd.Flag.Bool("no-warn", false, "suppress warning messages, which may be expected")
-	cmd.Flag.Bool("no-make", false, "do not generate a Makefile, e.g., when called from Makefile")
-	cmd.Flag.Bool("dynamic-link", false, "whether to link output shared library dynamically to Python")
-	cmd.Flag.String("build-tags", "", "build tags to be passed to `go build`")
-	return cmd
+type genCmd struct {
+	*baseCmd
 }
 
-func gopyRunCmdGen(cmdr *commander.Command, args []string) error {
-	var err error
+var _ subcommands.Command = (*genCmd)(nil)
 
-	if len(args) == 0 {
-		err := fmt.Errorf("gopy: expect a fully qualified go package name as argument")
-		log.Println(err)
-		return err
+func NewGenCmd(ctx context.Context) *genCmd {
+	return &genCmd{
+		baseCmd: newBaseCmd(ctx),
+	}
+}
+
+// Name returns the name of the command.
+func (*genCmd) Name() string { return genCmdName }
+
+// Synopsis returns the synopsis of the command.
+func (*genCmd) Synopsis() string { return genCmdSynopsis }
+
+// Usage returns a long string explaining the command and giving usage information.
+func (*genCmd) Usage() string {
+	return `usage: gopy gen <go-package-name> [other-go-package...]
+
+Command gen generates (C)Python language bindings for Go package(s).
+
+Example:
+gopy gen github.com/go-python/gopy/_examples/hi
+
+`
+}
+
+// SetFlags adds the flags for this command to the specified set.
+func (c *genCmd) SetFlags(f *flag.FlagSet) {
+	c.newFlags(f)
+}
+
+// Execute executes the gen command and returns an [subcommands.ExitStatus].
+func (c *genCmd) Execute(ctx context.Context, f *flag.FlagSet, args ...any) subcommands.ExitStatus {
+	if f.NArg() == 0 {
+		c.log.Error("gopy-gen: expect a fully qualified go package name as argument", slog.Any("args", f.Args()))
+		f.Usage()
+		return subcommands.ExitUsageError
 	}
 
 	cfg := NewBuildCfg()
-	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.String()
-	cfg.VM = cmdr.Flag.Lookup("vm").Value.String()
-	cfg.Name = cmdr.Flag.Lookup("name").Value.String()
-	cfg.Main = cmdr.Flag.Lookup("main").Value.String()
-	cfg.PkgPrefix = cmdr.Flag.Lookup("package-prefix").Value.String()
-	cfg.RenameCase, _ = strconv.ParseBool(cmdr.Flag.Lookup("rename").Value.String())
-	cfg.NoWarn, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-warn").Value.String())
-	cfg.NoMake, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-make").Value.String())
-	cfg.DynamicLinking, _ = strconv.ParseBool(cmdr.Flag.Lookup("dynamic-link").Value.String())
-	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.String()
+	cfg.OutputDir = c.output
+	cfg.Name = c.name
+	cfg.Main = c.main
+	cfg.VM = c.vm
+	cfg.PkgPrefix = c.packagePrefix
+	cfg.RenameCase = c.rename
+	cfg.Symbols = c.symbols
+	cfg.NoWarn = c.noWarn
+	cfg.NoMake = c.noMake
+	cfg.DynamicLinking = c.dynamicLink
+	cfg.BuildTags = c.buildTags
 
 	if cfg.VM == "" {
-		cfg.VM = "python"
+		cfg.VM = "python3"
 	}
 
 	bind.NoWarn = cfg.NoWarn
 	bind.NoMake = cfg.NoMake
 
-	for _, path := range args {
+	for _, path := range f.Args() {
 		bpkg, err := loadPackage(path, true, cfg.BuildTags) // build first
 		if err != nil {
-			return fmt.Errorf("gopy-gen: go build / load of package failed with path=%q: %v", path, err)
+			c.log.Error("gopy-gen: go build / load of package", slog.String("path", path), slog.Any("err", err))
+			return subcommands.ExitFailure
 		}
 		pkg, err := parsePackage(bpkg)
+		if err != nil {
+			c.log.Error("gopy-gen: parse package", slog.Any("bpkg", bpkg), slog.Any("err", err))
+			return subcommands.ExitFailure
+		}
 		if cfg.Name == "" {
 			cfg.Name = pkg.Name()
 		}
-		if err != nil {
-			return err
-		}
 	}
 
-	err = genPkg(bind.ModeGen, cfg)
-	if err != nil {
-		return err
+	if err := genPkg(bind.ModeGen, cfg); err != nil {
+		c.log.Error("gopy-gen: generate package", slog.Any("err", err))
+		return subcommands.ExitFailure
 	}
 
-	return err
+	return subcommands.ExitSuccess
 }

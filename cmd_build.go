@@ -5,290 +5,98 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"flag"
-	"fmt"
-	"log"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"runtime"
-	"strconv"
-	"strings"
+	"log/slog"
 
 	"github.com/go-python/gopy/bind"
 	"github.com/google/subcommands"
 )
 
-func gopyMakeCmdBuild() *subcommands.Command {
-	commander := &subcommands.Command{
-		Run:       gopyRunCmdBuild,
-		UsageLine: "build <go-package-name> [other-go-package...]",
-		Short:     "generate and compile (C)Python language bindings for Go",
-		Long:      `gopy generates a CPython extension module from a go package.`,
-		Flag:      *flag.NewFlagSet("gopy-build", flag.ExitOnError),
-	}
+const (
+	buildCmdName     = `build`
+	buildCmdSynopsis = `generate and compile (C)Python language bindings for Go.`
+)
 
-	// Prepend general documentation before the regular help output.
-	defaultExplain := commander.Explain
-	commander.Explain := commander.Explain
-
-	commander.Flag.String("vm", "python", "path to python interpreter")
-	commander.Flag.String("output", "", "output directory for bindings")
-	commander.Flag.String("name", "", "name of output package (otherwise name of first package is used)")
-	commander.Flag.String("main", "", "code string to run in the go main() function in the cgo library")
-	commander.Flag.String("package-prefix", ".", "custom package prefix used when generating import "+
-		"statements for generated package")
-	commander.Flag.Bool("rename", false, "rename Go symbols to python PEP snake_case")
-	commander.Flag.Bool("symbols", true, "include symbols in output")
-	commander.Flag.Bool("no-warn", false, "suppress warning messages, which may be expected")
-	commander.Flag.Bool("no-make", false, "do not generate a Makefile, e.g., when called from Makefile")
-	commander.Flag.Bool("dynamic-link", false, "whether to link output shared library dynamically to Python")
-	commander.Flag.String("build-tags", "", "build tags to be passed to `go build`")
-	return commander
+type buildCmd struct {
+	*baseCmd
 }
 
-func gopyRunCmdBuild(cmdr *subcommands.Command, args []string) error {
-	if len(args) == 0 {
-		err := fmt.Errorf("gopy: expect a fully qualified go package name as argument")
-		log.Println(err)
-		return err
+var _ subcommands.Command = (*buildCmd)(nil)
+
+func NewBuildCmd(ctx context.Context) *buildCmd {
+	return &buildCmd{
+		baseCmd: newBaseCmd(ctx),
+	}
+}
+
+// Name returns the name of the command.
+func (c *buildCmd) Name() string { return buildCmdName }
+
+// Synopsis returns a short string (less than one line) describing the command.
+func (c *buildCmd) Synopsis() string { return buildCmdSynopsis }
+
+// Usage returns a long string explaining the command and giving usage information.
+func (c *buildCmd) Usage() string {
+	return `usage: gopy build <go-package-name> [other-go-package...]
+
+Command build generates and compiles (C)Python language bindings for Go package(s).
+
+Example:
+	gopy build github.com/go-python/gopy/_examples/hi
+
+`
+}
+
+// SetFlags adds the flags for this command to the specified set.
+func (c *buildCmd) SetFlags(f *flag.FlagSet) {
+	c.newFlags(f)
+}
+
+// Execute executes the build command and returns an [subcommands.ExitStatus].
+func (c *buildCmd) Execute(ctx context.Context, f *flag.FlagSet, args ...any) subcommands.ExitStatus {
+	if f.NArg() == 0 {
+		c.log.Error("gopy build: expect a fully qualified go package name as argument", slog.Any("args", f.Args()))
+		f.Usage()
+		return subcommands.ExitUsageError
 	}
 
 	cfg := NewBuildCfg()
-	cfg.OutputDir = cmdr.Flag.Lookup("output").Value.String()
-	cfg.Name = cmdr.Flag.Lookup("name").Value.String()
-	cfg.Main = cmdr.Flag.Lookup("main").Value.String()
-	cfg.VM = cmdr.Flag.Lookup("vm").Value.String()
-	cfg.PkgPrefix = cmdr.Flag.Lookup("package-prefix").Value.String()
-	cfg.RenameCase, _ = strconv.ParseBool(cmdr.Flag.Lookup("rename").Value.String())
-	cfg.Symbols, _ = strconv.ParseBool(cmdr.Flag.Lookup("symbols").Value.String())
-	cfg.NoWarn, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-warn").Value.String())
-	cfg.NoMake, _ = strconv.ParseBool(cmdr.Flag.Lookup("no-make").Value.String())
-	cfg.DynamicLinking, _ = strconv.ParseBool(cmdr.Flag.Lookup("dynamic-link").Value.String())
-	cfg.BuildTags = cmdr.Flag.Lookup("build-tags").Value.String()
+	cfg.OutputDir = c.output
+	cfg.Name = c.name
+	cfg.Main = c.main
+	cfg.VM = c.vm
+	cfg.PkgPrefix = c.packagePrefix
+	cfg.RenameCase = c.rename
+	cfg.Symbols = c.symbols
+	cfg.NoWarn = c.noWarn
+	cfg.NoMake = c.noMake
+	cfg.DynamicLinking = c.dynamicLink
+	cfg.BuildTags = c.buildTags
 
 	bind.NoWarn = cfg.NoWarn
 	bind.NoMake = cfg.NoMake
 
-	for _, path := range args {
+	for _, path := range f.Args() {
 		bpkg, err := loadPackage(path, true, cfg.BuildTags) // build first
 		if err != nil {
-			return fmt.Errorf("gopy-gen: go build / load of package failed with path=%q: %v", path, err)
+			c.log.Error("gopy build: load of package", slog.String("path", path), slog.Any("err", err))
+			return subcommands.ExitFailure
 		}
 		pkg, err := parsePackage(bpkg)
 		if err != nil {
-			return err
+			c.log.Error("gopy build: parse of package", slog.Any("err", err))
+			return subcommands.ExitFailure
 		}
 		if cfg.Name == "" {
 			cfg.Name = pkg.Name()
 		}
 	}
-	return runBuild("build", cfg)
-}
 
-// runBuild calls genPkg and then executes commands to build the resulting files
-// exe = executable mode to build an executable instead of a library
-// mode = gen, build, pkg, exe
-func runBuild(mode bind.BuildMode, cfg *BuildCfg) error {
-	var err error
-	cfg.OutputDir, err = genOutDir(cfg.OutputDir)
-	if err != nil {
-		return err
-	}
-	err = genPkg(mode, cfg)
-	if err != nil {
-		return err
+	if err := c.runBuild(ctx, "build", cfg); err != nil {
+		c.log.Error("gopy build: build of package", slog.Any("err", err))
+		return subcommands.ExitFailure
 	}
 
-	fmt.Printf("\n--- building package ---\n%s\n", cfg.Cmd)
-
-	buildname := cfg.Name + "_go"
-	var cmdout []byte
-	cwd, err := os.Getwd()
-	os.Chdir(cfg.OutputDir)
-	defer os.Chdir(cwd)
-
-	os.Remove(cfg.Name + ".c") // may fail, we don't care
-
-	fmt.Printf("goimports -w %v\n", cfg.Name+".go")
-	cmd := exec.Command("goimports", "-w", cfg.Name+".go")
-	cmdout, err = cmd.CombinedOutput()
-	if err != nil {
-		fmt.Printf("cmd had error: %v  output:\no%v\n", err, string(cmdout))
-		return err
-	}
-
-	pycfg, err := bind.GetPythonConfig(cfg.VM)
-
-	if mode == bind.ModeExe {
-		of, err := os.Create(buildname + ".h") // overwrite existing
-		fmt.Fprintf(of, "typedef uint8_t bool;\n")
-		of.Close()
-
-		fmt.Printf("%v build.py   # will fail, but needed to generate .c file\n", cfg.VM)
-		cmd = exec.Command(cfg.VM, "build.py")
-		cmd.Run() // will fail, we don't care about errors
-
-		args := []string{"build", "-mod=mod", "-buildmode=c-shared"}
-		if cfg.BuildTags != "" {
-			args = append(args, "-tags", cfg.BuildTags)
-		}
-		args = append(args, "-o", buildname+libExt, ".")
-
-		fmt.Printf("go %v\n", strings.Join(args, " "))
-		cmd = exec.Command("go", args...)
-		cmdout, err = cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("cmd had error: %v  output:\n%v\n", err, string(cmdout))
-			return err
-		}
-
-		fmt.Printf("%v build.py   # should work this time\n", cfg.VM)
-		cmd = exec.Command(cfg.VM, "build.py")
-		cmdout, err = cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("cmd had error: %v  output:\n%v\n", err, string(cmdout))
-			return err
-		}
-
-		err = os.Remove(cfg.Name + "_go" + libExt)
-
-		fmt.Printf("go build -o py%s\n", cfg.Name)
-		cmd = exec.Command("go", "build", "-mod=mod")
-		if cfg.BuildTags != "" {
-			args = append(args, "-tags", cfg.BuildTags)
-		}
-		args = append(args, "-o", "py"+cfg.Name)
-		cmdout, err = cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("cmd had error: %v  output:\n%v\n", err, string(cmdout))
-			return err
-		}
-
-	} else {
-		buildLib := buildname + libExt
-		extext := libExt
-		if runtime.GOOS == "windows" {
-			extext = ".pyd"
-		}
-		if pycfg.ExtSuffix != "" {
-			extext = pycfg.ExtSuffix
-		}
-		modlib := "_" + cfg.Name + extext
-
-		// build the go shared library upfront to generate the header
-		// needed by our generated cpython code
-		args := []string{"build", "-mod=mod", "-buildmode=c-shared"}
-		if cfg.BuildTags != "" {
-			args = append(args, "-tags", cfg.BuildTags)
-		}
-		if !cfg.Symbols {
-			// These flags will omit the various symbol tables, thereby
-			// reducing the final size of the binary. From https://golang.org/cmd/link/
-			// -s Omit the symbol table and debug information
-			// -w Omit the DWARF symbol table
-			args = append(args, "-ldflags=-s -w")
-		}
-		args = append(args, "-o", buildLib, ".")
-		fmt.Printf("go %v\n", strings.Join(args, " "))
-		cmd = exec.Command("go", args...)
-		cmdout, err = cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("cmd had error: %v  output:\n%v\n", err, string(cmdout))
-			return err
-		}
-		// update the output name to the one with the ABI extension
-		args[len(args)-2] = modlib
-		// we don't need this initial lib because we are going to relink
-		os.Remove(buildLib)
-
-		// generate c code
-		fmt.Printf("%v build.py\n", cfg.VM)
-		cmd = exec.Command(cfg.VM, "build.py")
-		cmdout, err = cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("cmd had error: %v  output:\no%v\n", err, string(cmdout))
-			return err
-		}
-
-		if bind.WindowsOS {
-			fmt.Printf("Doing windows sed hack to fix declspec for PyInit\n")
-			fname := cfg.Name + ".c"
-			raw, err := os.ReadFile(fname)
-			if err != nil {
-				fmt.Printf("could not read %s: %+v", fname, err)
-				return fmt.Errorf("could not read %s: %w", fname, err)
-			}
-			raw = bytes.ReplaceAll(raw, []byte(" PyInit_"), []byte(" __declspec(dllexport) PyInit_"))
-			err = os.WriteFile(fname, raw, 0o644)
-			if err != nil {
-				fmt.Printf("could not apply sed hack to fix declspec for PyInit: %+v", err)
-				return fmt.Errorf("could not apply sed hack to fix PyInit: %w", err)
-			}
-		}
-
-		cflags := strings.Fields(strings.TrimSpace(pycfg.CFlags))
-		cflags = append(cflags, "-fPIC", "-O3", "-ffast-math")
-		if include, exists := os.LookupEnv("GOPY_INCLUDE"); exists {
-			cflags = append(cflags, "-I"+filepath.ToSlash(include))
-		}
-		if oldcflags, exists := os.LookupEnv("CGO_CFLAGS"); exists {
-			cflags = append(cflags, oldcflags)
-		}
-		var ldflags []string
-		if cfg.DynamicLinking {
-			ldflags = strings.Fields(strings.TrimSpace(pycfg.LdDynamicFlags))
-		} else {
-			ldflags = strings.Fields(strings.TrimSpace(pycfg.LdFlags))
-		}
-		if !cfg.Symbols {
-			ldflags = append(ldflags, "-s")
-		}
-		if lib, exists := os.LookupEnv("GOPY_LIBDIR"); exists {
-			ldflags = append(ldflags, "-L"+filepath.ToSlash(lib))
-		}
-		if libname, exists := os.LookupEnv("GOPY_PYLIB"); exists {
-			ldflags = append(ldflags, "-l"+filepath.ToSlash(libname))
-		}
-		if oldldflags, exists := os.LookupEnv("CGO_LDFLAGS"); exists {
-			ldflags = append(ldflags, oldldflags)
-		}
-
-		removeEmpty := func(src []string) []string {
-			o := make([]string, 0, len(src))
-			for _, v := range src {
-				if v == "" {
-					continue
-				}
-				o = append(o, v)
-			}
-			return o
-		}
-
-		cflags = removeEmpty(cflags)
-		ldflags = removeEmpty(ldflags)
-
-		cflagsEnv := fmt.Sprintf("CGO_CFLAGS=%s", strings.Join(cflags, " "))
-		ldflagsEnv := fmt.Sprintf("CGO_LDFLAGS=%s", strings.Join(ldflags, " "))
-
-		env := os.Environ()
-		env = append(env, cflagsEnv)
-		env = append(env, ldflagsEnv)
-
-		fmt.Println(cflagsEnv)
-		fmt.Println(ldflagsEnv)
-
-		// build extension with go + c
-		fmt.Printf("go %v\n", strings.Join(args, " "))
-		cmd = exec.Command("go", args...)
-		cmd.Env = env
-		cmdout, err = cmd.CombinedOutput()
-		if err != nil {
-			fmt.Printf("cmd had error: %v  output:\n%v\n", err, string(cmdout))
-			return err
-		}
-	}
-
-	return err
+	return subcommands.ExitSuccess
 }
