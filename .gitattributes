@@ -1,0 +1,10 @@
+# go-python/gopy project gitattributes file
+#  https://github.com/github-linguist/linguist/blob/master/docs/overrides.md
+
+* text=auto eol=lf
+
+go.sum       linguist-vendored
+go.work.sum  linguist-vendored
+
+*.go.tmpl   linguist-language=Go
+Dokecrfile  linguist-language=Dockerfile
